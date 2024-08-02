@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
-    get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name, get_relocatable_from_var_name, insert_value_from_var_name, insert_value_into_ap
+    get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name,
+    get_relocatable_from_var_name, insert_value_from_var_name, insert_value_into_ap,
 };
 use crate::hint_processor::hint_processor_definition::HintReference;
 use crate::math_utils::signed_felt;
@@ -94,10 +95,14 @@ pub fn compute_ids_high_low(
     constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
     const UPPER_BOUND: &str = "starkware.cairo.common.math.assert_250_bit.UPPER_BOUND";
+    const SHIFT: &str = "starkware.cairo.common.math.assert_250_bit.SHIFT";
     //Declare constant values
     let upper_bound = constants
         .get(UPPER_BOUND)
         .map_or_else(|| get_constant_from_var_name("UPPER_BOUND", constants), Ok)?;
+    let shift = constants
+        .get(SHIFT)
+        .map_or_else(|| get_constant_from_var_name("SHIFT", constants), Ok)?;
     let value = Felt252::from(&signed_felt(get_integer_from_var_name(
         "value",
         vm,
@@ -108,7 +113,6 @@ pub fn compute_ids_high_low(
         return Err(HintError::ValueOutside250BitRange(Box::new(value)));
     }
 
-    let shift = get_integer_from_var_name("SHIFT", vm, ids_data, ap_tracking)?;
     let (high, low) = value.div_rem(&shift.try_into().map_err(|_| MathError::DividedByZero)?);
     insert_value_from_var_name("high", high, vm, ids_data, ap_tracking)?;
     insert_value_from_var_name("low", low, vm, ids_data, ap_tracking)?;
