@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
-    get_integer_from_var_name, get_ptr_from_var_name, get_relocatable_from_var_name,
-    insert_value_from_var_name, insert_value_into_ap,
+    get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name, get_relocatable_from_var_name, insert_value_from_var_name, insert_value_into_ap
 };
 use crate::hint_processor::hint_processor_definition::HintReference;
 use crate::math_utils::signed_felt;
@@ -92,16 +91,20 @@ pub fn compute_ids_high_low(
     _exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
     ap_tracking: &ApTracking,
-    _constants: &HashMap<String, Felt252>,
+    constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let upper_bound = get_integer_from_var_name("UPPER_BOUND", vm, ids_data, ap_tracking)?;
+    const UPPER_BOUND: &str = "starkware.cairo.common.math.assert_250_bit.UPPER_BOUND";
+    //Declare constant values
+    let upper_bound = constants
+        .get(UPPER_BOUND)
+        .map_or_else(|| get_constant_from_var_name("UPPER_BOUND", constants), Ok)?;
     let value = Felt252::from(&signed_felt(get_integer_from_var_name(
         "value",
         vm,
         ids_data,
         ap_tracking,
     )?));
-    if value > upper_bound {
+    if &value > upper_bound {
         return Err(HintError::ValueOutside250BitRange(Box::new(value)));
     }
 
