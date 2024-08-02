@@ -21,8 +21,7 @@ use num_traits::Zero;
 use super::bigint_utils::BigInt3;
 use super::secp_utils::{SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P};
 
-pub const MAYBE_WRITE_ADDRESS_TO_AP: &str = r#"
-    memory[ap] = to_felt_or_relocatable(ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add())"#;
+pub const MAYBE_WRITE_ADDRESS_TO_AP: &str = r#"memory[ap] = to_felt_or_relocatable(ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add())"#;
 pub fn maybe_write_address_to_ap(
     vm: &mut VirtualMachine,
     _exec_scopes: &mut ExecutionScopes,
@@ -43,10 +42,9 @@ pub fn maybe_write_address_to_ap(
     Ok(())
 }
 
-pub const PACK_X_PRIME: &str = r#"
-    from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
-    from starkware.cairo.common.cairo_secp.secp_utils import pack
-    value = pack(ids.x, PRIME) % SECP256R1_P"#;
+pub const PACK_X_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+from starkware.cairo.common.cairo_secp.secp_utils import pack
+value = pack(ids.x, PRIME) % SECP256R1_P"#;
 pub fn pack_x_prime(
     vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
@@ -59,13 +57,12 @@ pub fn pack_x_prime(
     Ok(())
 }
 
-pub const COMPUTE_Q_MOD_PRIME: &str = r#"
-    from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
-    from starkware.cairo.common.cairo_secp.secp_utils import pack
+pub const COMPUTE_Q_MOD_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+from starkware.cairo.common.cairo_secp.secp_utils import pack
 
-    q, r = divmod(pack(ids.val, PRIME), SECP256R1_P)
-    assert r == 0, f"verify_zero: Invalid input {ids.val.d0, ids.val.d1, ids.val.d2}."
-    ids.q = q % PRIME"#;
+q, r = divmod(pack(ids.val, PRIME), SECP256R1_P)
+assert r == 0, f"verify_zero: Invalid input {ids.val.d0, ids.val.d1, ids.val.d2}."
+ids.q = q % PRIME"#;
 pub fn compute_q_mod_prime(
     vm: &mut VirtualMachine,
     _exec_scopes: &mut ExecutionScopes,
@@ -82,15 +79,14 @@ pub fn compute_q_mod_prime(
     Ok(())
 }
 
-pub const COMPUTE_IDS_HIGH_LOW: &str = r#"
-        from starkware.cairo.common.math_utils import as_int
+pub const COMPUTE_IDS_HIGH_LOW: &str = r#"from starkware.cairo.common.math_utils import as_int
 
-        # Correctness check.
-        value = as_int(ids.value, PRIME) % PRIME
-        assert value < ids.UPPER_BOUND, f'{value} is outside of the range [0, 2**165).'
+# Correctness check.
+value = as_int(ids.value, PRIME) % PRIME
+assert value < ids.UPPER_BOUND, f'{value} is outside of the range [0, 2**165).'
 
-        # Calculation for the assertion.
-        ids.high, ids.low = divmod(ids.value, ids.SHIFT)"#;
+# Calculation for the assertion.
+ids.high, ids.low = divmod(ids.value, ids.SHIFT)"#;
 pub fn compute_ids_high_low(
     vm: &mut VirtualMachine,
     _exec_scopes: &mut ExecutionScopes,
@@ -116,28 +112,27 @@ pub fn compute_ids_high_low(
     Ok(())
 }
 
-pub const CALCULATE_VALUE: &str = r#"
-    from starkware.cairo.common.cairo_secp.secp_utils import SECP256R1, pack
-    from starkware.python.math_utils import y_squared_from_x
+pub const CALCULATE_VALUE: &str = r#"from starkware.cairo.common.cairo_secp.secp_utils import SECP256R1, pack
+from starkware.python.math_utils import y_squared_from_x
 
-    y_square_int = y_squared_from_x(
-        x=pack(ids.x, SECP256R1.prime),
-        alpha=SECP256R1.alpha,
-        beta=SECP256R1.beta,
-        field_prime=SECP256R1.prime,
-    )
+y_square_int = y_squared_from_x(
+    x=pack(ids.x, SECP256R1.prime),
+    alpha=SECP256R1.alpha,
+    beta=SECP256R1.beta,
+    field_prime=SECP256R1.prime,
+)
 
-    # Note that (y_square_int ** ((SECP256R1.prime + 1) / 4)) ** 2 =
-    #   = y_square_int ** ((SECP256R1.prime + 1) / 2) =
-    #   = y_square_int ** ((SECP256R1.prime - 1) / 2 + 1) =
-    #   = y_square_int * y_square_int ** ((SECP256R1.prime - 1) / 2) = y_square_int * {+/-}1.
-    y = pow(y_square_int, (SECP256R1.prime + 1) // 4, SECP256R1.prime)
+# Note that (y_square_int ** ((SECP256R1.prime + 1) / 4)) ** 2 =
+#   = y_square_int ** ((SECP256R1.prime + 1) / 2) =
+#   = y_square_int ** ((SECP256R1.prime - 1) / 2 + 1) =
+#   = y_square_int * y_square_int ** ((SECP256R1.prime - 1) / 2) = y_square_int * {+/-}1.
+y = pow(y_square_int, (SECP256R1.prime + 1) // 4, SECP256R1.prime)
 
-    # We need to decide whether to take y or prime - y.
-    if ids.v % 2 == y % 2:
-        value = y
-    else:
-        value = (-y) % SECP256R1.prime"#;
+# We need to decide whether to take y or prime - y.
+if ids.v % 2 == y % 2:
+    value = y
+else:
+    value = (-y) % SECP256R1.prime"#;
 
 pub fn calculate_value(
     vm: &mut VirtualMachine,
