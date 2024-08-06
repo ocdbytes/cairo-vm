@@ -45,13 +45,25 @@ pub fn maybe_write_address_to_ap(
     Ok(())
 }
 
+pub const PACK_VALUE_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+from starkware.cairo.common.cairo_secp.secp_utils import pack
+value = pack(ids.x, PRIME) % SECP256R1_P"#;
+pub fn pack_value_prime(
+    vm: &mut VirtualMachine,
+    exec_scopes: &mut ExecutionScopes,
+    ids_data: &HashMap<String, HintReference>,
+    ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    let x = BigInt3::from_var_name("x", vm, ids_data, ap_tracking)?.pack86();
+    exec_scopes.insert_value("value", x.mod_floor(&SECP256R1_P));
+    Ok(())
+}
+
 pub const PACK_X_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
 from starkware.cairo.common.cairo_secp.secp_utils import pack
-value = pack(ids.x, PRIME) % SECP256R1_P"#;
-pub const PACK_X_PRIME_2: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
-from starkware.cairo.common.cairo_secp.secp_utils import pack
 
-value = pack(ids.x, PRIME) % SECP256R1_P"#;
+x = pack(ids.x, PRIME) % SECP256R1_P"#;
 pub fn pack_x_prime(
     vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
@@ -316,6 +328,7 @@ pub fn generate_nibbles(
     exec_scopes.insert_value("nibbles", nibbles);
     Ok(())
 }
+
 
 pub const FAST_SECP_ADD_ASSIGN_NEW_Y: &str =
     r#"value = new_y = (slope * (x - new_x) - y) % SECP256R1_P"#;
@@ -649,7 +662,7 @@ mod tests {
 
         let mut exec_scopes = ExecutionScopes::new();
 
-        pack_x_prime(
+        pack_value_prime(
             &mut vm,
             &mut exec_scopes,
             &ids_data,
