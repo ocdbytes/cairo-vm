@@ -945,6 +945,20 @@ impl HintProcessorLogic for BuiltinHintProcessor {
                 &hint_data.ap_tracking,
                 constants,
             ),
+            secp::hints::PACK_X_PRIME_2 => secp::hints::pack_x_prime(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                constants,
+            ),
+            secp::hints::COMPUTE_VALUE_DIV_MOD => secp::hints::compute_value_div_mod(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                constants,
+            ),
             code => Err(HintError::UnknownHint(code.to_string().into_boxed_str())),
         }
     }

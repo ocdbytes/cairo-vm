@@ -71,6 +71,14 @@ lazy_static! {
         16,
     )
     .unwrap();
+
+    pub(crate) static ref BLS_PRIME: BigInt = BigInt::from_str_radix(
+        "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001",
+        16,
+    )
+    .unwrap();
+    
+
 }
 
 /*

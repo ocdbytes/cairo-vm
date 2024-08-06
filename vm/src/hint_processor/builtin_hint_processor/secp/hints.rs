@@ -3,14 +3,15 @@ use std::ops::Deref;
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
     get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name,
-    insert_value_from_var_name, insert_value_into_ap,
+    get_relocatable_from_var_name, insert_value_from_var_name, insert_value_into_ap,
 };
 use crate::hint_processor::builtin_hint_processor::uint256_utils::Uint256;
 use crate::hint_processor::hint_processor_definition::HintReference;
-use crate::math_utils::signed_felt;
+use crate::math_utils::{div_mod, signed_felt};
 use crate::serde::deserialize_program::ApTracking;
 use crate::types::errors::math_errors::MathError;
 use crate::types::exec_scope::ExecutionScopes;
+use crate::types::relocatable::MaybeRelocatable;
 use crate::vm::errors::hint_errors::HintError;
 use crate::vm::vm_core::VirtualMachine;
 use crate::Felt252;
@@ -21,7 +22,7 @@ use num_traits::{FromPrimitive, One};
 
 use super::bigint_utils::BigInt3;
 use super::ec_utils::EcPoint;
-use super::secp_utils::{SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P};
+use super::secp_utils::{bigint3_split, BLS_PRIME, SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P};
 
 pub const MAYBE_WRITE_ADDRESS_TO_AP: &str = r#"memory[ap] = to_felt_or_relocatable(ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add())"#;
 pub fn maybe_write_address_to_ap(
@@ -46,6 +47,10 @@ pub fn maybe_write_address_to_ap(
 
 pub const PACK_X_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
 from starkware.cairo.common.cairo_secp.secp_utils import pack
+value = pack(ids.x, PRIME) % SECP256R1_P"#;
+pub const PACK_X_PRIME_2: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+from starkware.cairo.common.cairo_secp.secp_utils import pack
+
 value = pack(ids.x, PRIME) % SECP256R1_P"#;
 pub fn pack_x_prime(
     vm: &mut VirtualMachine,
@@ -349,6 +354,64 @@ pub fn write_nibbles_to_mem(
     let nibble = nibbles.pop().unwrap();
     vm.insert_value((vm.get_fp() + 0)?, nibble)?;
 
+    Ok(())
+}
+
+pub const COMPUTE_VALUE_DIV_MOD: &str = r#"from starkware.python.math_utils import div_mod
+value = div_mod(1, x, SECP256R1_P)"#;
+pub fn compute_value_div_mod(
+    vm: &mut VirtualMachine,
+    exec_scopes: &mut ExecutionScopes,
+    _ids_data: &HashMap<String, HintReference>,
+    _ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    //Get variables from vm scope
+    let x = exec_scopes.get_ref::<BigInt>("x")?;
+
+    let value = div_mod(&BigInt::one(), x, &SECP256R1_P)?;
+    exec_scopes.insert_value("value", value);
+
+    Ok(())
+}
+
+pub const WRITE_DIVMOD_SEGMENT: &str = r#"from starkware.starknet.core.os.data_availability.bls_utils import BLS_PRIME, pack, split
+
+a = pack(ids.a, PRIME)
+b = pack(ids.b, PRIME)
+
+q, r = divmod(a * b, BLS_PRIME)
+
+# By the assumption: |a|, |b| < 2**104 * ((2**86) ** 2 + 2**86 + 1) < 2**276.001.
+# Therefore |q| <= |ab| / BLS_PRIME < 2**299.
+# Hence the absolute value of the high limb of split(q) < 2**127.
+segments.write_arg(ids.q.address_, split(q))
+segments.write_arg(ids.res.address_, split(r))"#;
+
+pub fn write_div_mod_segment(
+    vm: &mut VirtualMachine,
+    _exec_scopes: &mut ExecutionScopes,
+    ids_data: &HashMap<String, HintReference>,
+    ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    let a = BigInt3::from_var_name("a", vm, ids_data, ap_tracking)?.pack86();
+    let b = BigInt3::from_var_name("b", vm, ids_data, ap_tracking)?.pack86();
+    let (q, r) = (a * b).div_rem(&BLS_PRIME);
+    let q_reloc = get_relocatable_from_var_name("q", vm, ids_data, ap_tracking)?;
+    let res_reloc = get_relocatable_from_var_name("res", vm, ids_data, ap_tracking)?;
+
+    let q_arg: Vec<MaybeRelocatable> = bigint3_split(&q.to_biguint().unwrap())?
+        .into_iter()
+        .map(|ref n| Felt252::from(n).into())
+        .collect::<Vec<MaybeRelocatable>>();
+    let res_arg: Vec<MaybeRelocatable> = bigint3_split(&r.to_biguint().unwrap())?
+        .into_iter()
+        .map(|ref n| Felt252::from(n).into())
+        .collect::<Vec<MaybeRelocatable>>();
+    vm.write_arg(q_reloc, &q_arg).map_err(HintError::Memory)?;
+    vm.write_arg(res_reloc, &res_arg)
+        .map_err(HintError::Memory)?;
     Ok(())
 }
 
