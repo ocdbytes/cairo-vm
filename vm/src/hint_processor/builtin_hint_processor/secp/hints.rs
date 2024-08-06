@@ -20,7 +20,7 @@ use num_integer::Integer;
 use num_traits::Zero;
 use num_traits::{FromPrimitive, One};
 
-use super::bigint_utils::BigInt3;
+use super::bigint_utils::{BigInt3, Uint384};
 use super::ec_utils::EcPoint;
 use super::secp_utils::{bigint3_split, BLS_PRIME, SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P};
 
@@ -89,7 +89,7 @@ pub fn compute_q_mod_prime(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let val = BigInt3::from_var_name("val", vm, ids_data, ap_tracking)?.pack86();
+    let val = Uint384::from_var_name("val", vm, ids_data, ap_tracking)?.pack86();
     let (q, r) = val.div_rem(&SECP256R1_P);
     if !r.is_zero() {
         return Err(HintError::SecpVerifyZero(Box::new(val)));
