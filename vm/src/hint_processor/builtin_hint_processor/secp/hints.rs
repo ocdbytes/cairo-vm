@@ -229,8 +229,7 @@ pub fn is_on_curve_2(
     Ok(())
 }
 
-pub const CALCULATE_VALUE_2: &str = r#"
-from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+pub const CALCULATE_VALUE_2: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
 from starkware.cairo.common.cairo_secp.secp_utils import pack
 
 slope = pack(ids.slope, SECP256R1_P)
@@ -267,8 +266,7 @@ pub fn calculate_value_2(
 }
 
 #[allow(unused)]
-pub const GENERATE_NIBBLES: &str = r#"
-num = (ids.scalar.high << 128) + ids.scalar.low
+pub const GENERATE_NIBBLES: &str = r#"num = (ids.scalar.high << 128) + ids.scalar.low
 nibbles = [(num >> i) & 0xf for i in range(0, 256, 4)]
 ids.first_nibble = nibbles.pop()
 ids.last_nibble = nibbles[0]"#;
