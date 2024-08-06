@@ -14,7 +14,7 @@ use crate::types::exec_scope::ExecutionScopes;
 use crate::vm::errors::hint_errors::HintError;
 use crate::vm::vm_core::VirtualMachine;
 use crate::Felt252;
-use num_bigint::{BigInt, BigUint, ToBigInt};
+use num_bigint::{BigInt, BigUint};
 use num_integer::Integer;
 use num_traits::Zero;
 use num_traits::{FromPrimitive, One};
@@ -314,7 +314,7 @@ pub fn generate_nibbles(
 pub const FAST_SECP_ADD_ASSIGN_NEW_Y: &str =
     r#"value = new_y = (slope * (x - new_x) - y) % SECP256R1_P"#;
 pub fn fast_secp_add_assign_new_y(
-    vm: &mut VirtualMachine,
+    _vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
     _ids_data: &HashMap<String, HintReference>,
     _ap_tracking: &ApTracking,
@@ -344,7 +344,7 @@ pub fn write_nibbles_to_mem(
     _ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let nibbles: &Vec<Felt252> = exec_scopes.get_list_ref("nibbles")?;
+    let nibbles: &mut Vec<Felt252> = exec_scopes.get_mut_list_ref("nibbles")?;
     let nibble = nibbles.pop().unwrap();
     vm.insert_value((vm.get_fp() + 0)?, nibble)?;
 
