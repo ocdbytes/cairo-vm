@@ -360,7 +360,7 @@ pub fn write_nibbles_to_mem(
 pub const COMPUTE_VALUE_DIV_MOD: &str = r#"from starkware.python.math_utils import div_mod
 value = div_mod(1, x, SECP256R1_P)"#;
 pub fn compute_value_div_mod(
-    vm: &mut VirtualMachine,
+    _vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
     _ids_data: &HashMap<String, HintReference>,
     _ap_tracking: &ApTracking,
