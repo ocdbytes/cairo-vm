@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
     get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name,
@@ -272,13 +273,12 @@ ids.first_nibble = nibbles.pop()
 ids.last_nibble = nibbles[0]"#;
 pub fn generate_nibbles(
     vm: &mut VirtualMachine,
-    _exec_scopes: &mut ExecutionScopes,
+    exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let num = Uint256::from_var_name("scalar", vm, ids_data, ap_tracking)?
-        .pack();
+    let num = Uint256::from_var_name("scalar", vm, ids_data, ap_tracking)?.pack();
 
     // Generate nibbles
     let mut nibbles: Vec<Felt252> = (0..256)
@@ -307,6 +307,47 @@ pub fn generate_nibbles(
         ids_data,
         ap_tracking,
     )?;
+    exec_scopes.insert_value("nibbles", nibbles);
+    Ok(())
+}
+
+pub const FAST_SECP_ADD_ASSIGN_NEW_Y: &str =
+    r#"value = new_y = (slope * (x - new_x) - y) % SECP256R1_P"#;
+pub fn fast_secp_add_assign_new_y(
+    vm: &mut VirtualMachine,
+    exec_scopes: &mut ExecutionScopes,
+    _ids_data: &HashMap<String, HintReference>,
+    _ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    //Get variables from vm scope
+    let (slope, x, new_x, y, secp_p) = (
+        exec_scopes.get::<BigInt>("slope")?,
+        exec_scopes.get::<BigInt>("x")?,
+        exec_scopes.get::<BigInt>("new_x")?,
+        exec_scopes.get::<BigInt>("y")?,
+        SECP256R1_P.deref(),
+    );
+    let value = (slope * (x - new_x) - y).mod_floor(secp_p);
+    exec_scopes.insert_value("value", value.clone());
+    exec_scopes.insert_value("new_y", value);
+
+    Ok(())
+}
+
+pub const WRITE_NIBBLES_TO_MEM: &str = r#"memory[fp + 0] = to_felt_or_relocatable(nibbles.pop())"#;
+
+pub fn write_nibbles_to_mem(
+    vm: &mut VirtualMachine,
+    exec_scopes: &mut ExecutionScopes,
+    _ids_data: &HashMap<String, HintReference>,
+    _ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    let nibbles: &Vec<Felt252> = exec_scopes.get_list_ref("nibbles")?;
+    let nibble = nibbles.pop().unwrap();
+    vm.insert_value((vm.get_fp() + 0)?, nibble)?;
+
     Ok(())
 }
 

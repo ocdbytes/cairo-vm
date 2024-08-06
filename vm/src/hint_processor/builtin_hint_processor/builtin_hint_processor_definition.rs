@@ -896,6 +896,20 @@ impl HintProcessorLogic for BuiltinHintProcessor {
                 &hint_data.ap_tracking,
                 constants,
             ),
+            secp::hints::FAST_SECP_ADD_ASSIGN_NEW_Y => secp::hints::fast_secp_add_assign_new_y(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                constants,
+            ),
+            secp::hints::WRITE_NIBBLES_TO_MEM => secp::hints::write_nibbles_to_mem(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                constants,
+            ),
             secp::hints::COMPUTE_IDS_HIGH_LOW => secp::hints::compute_ids_high_low(
                 vm,
                 exec_scopes,
