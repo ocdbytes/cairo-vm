@@ -71,7 +71,7 @@ pub fn pack_x_prime(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let x = BigInt3::from_var_name("x", vm, ids_data, ap_tracking)?.pack86();
+    let x = Uint384::from_var_name("x", vm, ids_data, ap_tracking)?.pack86();
     exec_scopes.insert_value("value", x.mod_floor(&SECP256R1_P));
     Ok(())
 }
