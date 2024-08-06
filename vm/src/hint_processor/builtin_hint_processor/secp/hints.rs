@@ -273,7 +273,7 @@ pub fn calculate_value_2(
     let x = point.x.pack86().mod_floor(&SECP256R1_P);
     let y = point.y.pack86().mod_floor(&SECP256R1_P);
 
-    let value = (slope.pow(2) - (&x << 1u32)).mod_floor(&SECP256R1_P);
+    let value = (slope.modpow(&(2usize.into()), &SECP256R1_P) - (&x << 1u32)).mod_floor(&SECP256R1_P);
 
     //Assign variables to vm scope
     exec_scopes.insert_value("slope", slope);
