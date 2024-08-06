@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::ops::Deref;
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
     get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name,
-    get_relocatable_from_var_name, insert_value_from_var_name, insert_value_into_ap,
+    insert_value_from_var_name, insert_value_into_ap,
 };
 use crate::hint_processor::hint_processor_definition::HintReference;
 use crate::math_utils::signed_felt;
@@ -154,16 +153,37 @@ pub fn calculate_value(
     // y^2 = x^3 + alpha * x + beta (mod field_prime)
     // """
     // return (pow(x, 3, field_prime) + alpha * x + beta) % field_prime
-    fn get_y_squared_from_x(x: &BigInt) -> BigInt {
-        (x.modpow(&BigInt::from(3), &SECP256R1_P)
-            + SECP256R1_ALPHA.deref() * x
-            + SECP256R1_B.deref())
-        .mod_floor(&SECP256R1_P)
+    fn y_squared_from_x(x: &BigInt, alpha: &BigInt, beta: &BigInt, field_prime: &BigInt) -> BigInt {
+        use std::ops::{Add, Mul, Rem};
+        // Compute x^3 (mod field_prime)
+        let x_cubed = x.modpow(&BigInt::from(3), &field_prime);
+
+        // Compute alpha * x
+        let alpha_x = alpha.mul(x);
+
+        // Compute y^2 = (x^3 + alpha * x + beta) % field_prime
+        let y_squared = x_cubed.add(&alpha_x).add(beta).rem(field_prime);
+
+        y_squared
     }
 
-    let x = pack_from_var_name("x", ids_data, vm, ap_tracking, &SECP256R1_P)?;
+    // prime = curve.prime
+    //     y_squared = y_squared_from_x(
+    //         x=x,
+    //         alpha=curve.alpha,
+    //         beta=curve.beta,
+    //         field_prime=prime,
+    //     )
 
-    let y_square_int = get_y_squared_from_x(&x);
+    //     y = pow(y_squared, (prime + 1) // 4, prime)
+    //     if (y & 1) != request.y_parity:
+    //         y = (-y) % prime
+
+    let x = BigInt3::from_var_name("x", vm, ids_data, ap_tracking)?
+        .pack86()
+        .mod_floor(&SECP256R1_P);
+
+    let y_square_int = y_squared_from_x(&x, &SECP256R1_ALPHA, &SECP256R1_B, &SECP256R1_P);
     exec_scopes.insert_value::<BigInt>("y_square_int", y_square_int.clone());
 
     // Calculate (prime + 1) // 4
@@ -207,48 +227,48 @@ pub fn is_on_curve_2(
     Ok(())
 }
 
-fn pack_b(d0: &BigInt, d1: &BigInt, d2: &BigInt, prime: &BigInt) -> BigInt {
-    let unreduced_big_int_3 = vec![d0, d1, d2];
+// fn pack_b(d0: &BigInt, d1: &BigInt, d2: &BigInt, prime: &BigInt) -> BigInt {
+//     let unreduced_big_int_3 = vec![d0, d1, d2];
 
-    unreduced_big_int_3
-        .iter()
-        .enumerate()
-        .map(|(idx, value)| as_int(value, prime) << (idx * 86))
-        .sum()
-}
+//     unreduced_big_int_3
+//         .iter()
+//         .enumerate()
+//         .map(|(idx, value)| as_int(value, prime) << (idx * 86))
+//         .sum()
+// }
 
 /// Returns the lift of the given field element, val, as an integer in the range (-prime/2,
 /// prime/2).
-fn as_int(val: &BigInt, prime: &BigInt) -> BigInt {
-    use std::ops::Shr;
-    // n.shr(1) = n.div_floor(2)
-    if *val < prime.shr(1) {
-        val.clone()
-    } else {
-        val - prime
-    }
-}
+// fn as_int(val: &BigInt, prime: &BigInt) -> BigInt {
+//     use std::ops::Shr;
+//     // n.shr(1) = n.div_floor(2)
+//     if *val < prime.shr(1) {
+//         val.clone()
+//     } else {
+//         val - prime
+//     }
+// }
 
-fn pack_from_var_name(
-    name: &str,
-    ids: &HashMap<String, HintReference>,
-    vm: &VirtualMachine,
-    hint_ap_tracking: &ApTracking,
-    prime: &BigInt,
-) -> Result<BigInt, HintError> {
-    let to_pack = get_relocatable_from_var_name(name, vm, ids, hint_ap_tracking)?;
+// fn pack_from_var_name(
+//     name: &str,
+//     ids: &HashMap<String, HintReference>,
+//     vm: &VirtualMachine,
+//     hint_ap_tracking: &ApTracking,
+//     prime: &BigInt,
+// ) -> Result<BigInt, HintError> {
+//     let to_pack = get_relocatable_from_var_name(name, vm, ids, hint_ap_tracking)?;
 
-    let d0 = vm.get_integer(to_pack)?;
-    let d1 = vm.get_integer((to_pack + 1)?)?;
-    let d2 = vm.get_integer((to_pack + 2)?)?;
+//     let d0 = vm.get_integer(to_pack)?;
+//     let d1 = vm.get_integer((to_pack + 1)?)?;
+//     let d2 = vm.get_integer((to_pack + 2)?)?;
 
-    Ok(pack_b(
-        &d0.to_bigint(),
-        &d1.to_bigint(),
-        &d2.to_bigint(),
-        prime,
-    ))
-}
+//     Ok(pack_b(
+//         &d0.to_bigint(),
+//         &d1.to_bigint(),
+//         &d2.to_bigint(),
+//         prime,
+//     ))
+// }
 
 #[cfg(test)]
 mod tests {
