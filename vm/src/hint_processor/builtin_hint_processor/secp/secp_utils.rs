@@ -72,12 +72,11 @@ lazy_static! {
     )
     .unwrap();
 
-    pub(crate) static ref BLS_PRIME: BigInt = BigInt::from_str_radix(
-        "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001",
-        16,
+    pub(crate) static ref BLS_PRIME: BigInt = BigInt::from_str(
+        "52435875175126190479447740508185965837690552500527637822603658699938581184513"
     )
     .unwrap();
-    
+
 
 }
 

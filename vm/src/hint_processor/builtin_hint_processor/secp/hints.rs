@@ -409,8 +409,8 @@ pub fn write_div_mod_segment(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let a = BigInt3::from_var_name("a", vm, ids_data, ap_tracking)?.pack86();
-    let b = BigInt3::from_var_name("b", vm, ids_data, ap_tracking)?.pack86();
+    let a = Uint384::from_var_name("a", vm, ids_data, ap_tracking)?.pack86();
+    let b = Uint384::from_var_name("b", vm, ids_data, ap_tracking)?.pack86();
     let (q, r) = (a * b).div_rem(&BLS_PRIME);
     let q_reloc = get_relocatable_from_var_name("q", vm, ids_data, ap_tracking)?;
     let res_reloc = get_relocatable_from_var_name("res", vm, ids_data, ap_tracking)?;
