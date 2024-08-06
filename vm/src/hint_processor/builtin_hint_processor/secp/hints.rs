@@ -4,6 +4,7 @@ use crate::hint_processor::builtin_hint_processor::hint_utils::{
     get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name,
     insert_value_from_var_name, insert_value_into_ap,
 };
+use crate::hint_processor::builtin_hint_processor::uint256_utils::Uint256;
 use crate::hint_processor::hint_processor_definition::HintReference;
 use crate::math_utils::signed_felt;
 use crate::serde::deserialize_program::ApTracking;
@@ -12,12 +13,13 @@ use crate::types::exec_scope::ExecutionScopes;
 use crate::vm::errors::hint_errors::HintError;
 use crate::vm::vm_core::VirtualMachine;
 use crate::Felt252;
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_integer::Integer;
-use num_traits::One;
 use num_traits::Zero;
+use num_traits::{FromPrimitive, One};
 
 use super::bigint_utils::BigInt3;
+use super::ec_utils::EcPoint;
 use super::secp_utils::{SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P};
 
 pub const MAYBE_WRITE_ADDRESS_TO_AP: &str = r#"memory[ap] = to_felt_or_relocatable(ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add())"#;
@@ -227,51 +229,93 @@ pub fn is_on_curve_2(
     Ok(())
 }
 
-// fn pack_b(d0: &BigInt, d1: &BigInt, d2: &BigInt, prime: &BigInt) -> BigInt {
-//     let unreduced_big_int_3 = vec![d0, d1, d2];
+pub const CALCULATE_VALUE_2: &str = r#"
+from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+from starkware.cairo.common.cairo_secp.secp_utils import pack
 
-//     unreduced_big_int_3
-//         .iter()
-//         .enumerate()
-//         .map(|(idx, value)| as_int(value, prime) << (idx * 86))
-//         .sum()
-// }
+slope = pack(ids.slope, SECP256R1_P)
+x = pack(ids.point.x, SECP256R1_P)
+y = pack(ids.point.y, SECP256R1_P)
 
-/// Returns the lift of the given field element, val, as an integer in the range (-prime/2,
-/// prime/2).
-// fn as_int(val: &BigInt, prime: &BigInt) -> BigInt {
-//     use std::ops::Shr;
-//     // n.shr(1) = n.div_floor(2)
-//     if *val < prime.shr(1) {
-//         val.clone()
-//     } else {
-//         val - prime
-//     }
-// }
+value = new_x = (pow(slope, 2, SECP256R1_P) - 2 * x) % SECP256R1_P"#;
 
-// fn pack_from_var_name(
-//     name: &str,
-//     ids: &HashMap<String, HintReference>,
-//     vm: &VirtualMachine,
-//     hint_ap_tracking: &ApTracking,
-//     prime: &BigInt,
-// ) -> Result<BigInt, HintError> {
-//     let to_pack = get_relocatable_from_var_name(name, vm, ids, hint_ap_tracking)?;
+pub fn calculate_value_2(
+    vm: &mut VirtualMachine,
+    exec_scopes: &mut ExecutionScopes,
+    ids_data: &HashMap<String, HintReference>,
+    ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    //ids.slope
+    let slope = BigInt3::from_var_name("slope", vm, ids_data, ap_tracking)?;
+    //ids.point
+    let point = EcPoint::from_var_name("point", vm, ids_data, ap_tracking)?;
 
-//     let d0 = vm.get_integer(to_pack)?;
-//     let d1 = vm.get_integer((to_pack + 1)?)?;
-//     let d2 = vm.get_integer((to_pack + 2)?)?;
+    let slope = slope.pack86().mod_floor(&SECP256R1_P);
+    let x = point.x.pack86().mod_floor(&SECP256R1_P);
+    let y = point.y.pack86().mod_floor(&SECP256R1_P);
 
-//     Ok(pack_b(
-//         &d0.to_bigint(),
-//         &d1.to_bigint(),
-//         &d2.to_bigint(),
-//         prime,
-//     ))
-// }
+    let value = (slope.pow(2) - (&x << 1u32)).mod_floor(&SECP256R1_P);
+
+    //Assign variables to vm scope
+    exec_scopes.insert_value("slope", slope);
+    exec_scopes.insert_value("x", x);
+    exec_scopes.insert_value("y", y);
+    exec_scopes.insert_value("value", value.clone());
+    exec_scopes.insert_value("new_x", value);
+    Ok(())
+}
+
+#[allow(unused)]
+pub const GENERATE_NIBBLES: &str = r#"
+num = (ids.scalar.high << 128) + ids.scalar.low
+nibbles = [(num >> i) & 0xf for i in range(0, 256, 4)]
+ids.first_nibble = nibbles.pop()
+ids.last_nibble = nibbles[0]"#;
+pub fn generate_nibbles(
+    vm: &mut VirtualMachine,
+    _exec_scopes: &mut ExecutionScopes,
+    ids_data: &HashMap<String, HintReference>,
+    ap_tracking: &ApTracking,
+    _constants: &HashMap<String, Felt252>,
+) -> Result<(), HintError> {
+    let num = Uint256::from_var_name("scalar", vm, ids_data, ap_tracking)?
+        .pack();
+
+    // Generate nibbles
+    let mut nibbles: Vec<Felt252> = (0..256)
+        .step_by(4)
+        .map(|i| ((&num >> i) & BigUint::from_u8(0xf).unwrap()))
+        .map(|s: BigUint| s.into())
+        .collect();
+
+    // ids.first_nibble = nibbles.pop()
+    let first_nibble = nibbles.pop().unwrap();
+
+    insert_value_from_var_name(
+        "first_nibble",
+        Felt252::from(first_nibble),
+        vm,
+        ids_data,
+        ap_tracking,
+    )?;
+
+    // ids.last_nibble = nibbles[0]
+    let last_nibble = *nibbles.get(0).unwrap();
+    insert_value_from_var_name(
+        "last_nibble",
+        Felt252::from(last_nibble),
+        vm,
+        ids_data,
+        ap_tracking,
+    )?;
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
+
+    use std::ops::Deref;
 
     use assert_matches::assert_matches;
     use rstest::rstest;

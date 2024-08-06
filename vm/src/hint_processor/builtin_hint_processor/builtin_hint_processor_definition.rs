@@ -882,6 +882,20 @@ impl HintProcessorLogic for BuiltinHintProcessor {
                 &hint_data.ap_tracking,
                 constants,
             ),
+            secp::hints::CALCULATE_VALUE_2 => secp::hints::calculate_value_2(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                constants,
+            ),
+            secp::hints::GENERATE_NIBBLES => secp::hints::generate_nibbles(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                constants,
+            ),
             secp::hints::COMPUTE_IDS_HIGH_LOW => secp::hints::compute_ids_high_low(
                 vm,
                 exec_scopes,
