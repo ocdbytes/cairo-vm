@@ -246,6 +246,7 @@ pub fn calculate_value_2(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
+    exec_scopes.insert_value::<BigInt>("SECP256R1_P", SECP256R1_P.clone());
     //ids.slope
     let slope = BigInt3::from_var_name("slope", vm, ids_data, ap_tracking)?;
     //ids.point
