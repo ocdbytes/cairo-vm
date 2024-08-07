@@ -451,7 +451,7 @@ fn bls_split(num: &BigInt) -> Vec<BigInt> {
         a.push(residue);
     }
     a.push(num.clone());
-    assert!(num.abs() < BigInt::from_u64(1 << 127).unwrap());
+    assert!(num.abs() < BigInt::from_u128(1 << 127).unwrap());
     a
 }
 
