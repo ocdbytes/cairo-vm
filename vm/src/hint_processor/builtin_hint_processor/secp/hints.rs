@@ -89,9 +89,8 @@ pub fn compute_q_mod_prime(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let secp_p = exec_scopes.get_ref("SECP256R1_P")?;
     let val = Uint384::from_var_name("val", vm, ids_data, ap_tracking)?.pack86();
-    let (q, r) = val.div_mod_floor(&secp_p);
+    let (q, r) = val.div_mod_floor(&SECP256R1_P);
     if !r.is_zero() {
         return Err(HintError::SecpVerifyZero(Box::new(val)));
     }
