@@ -84,13 +84,14 @@ assert r == 0, f"verify_zero: Invalid input {ids.val.d0, ids.val.d1, ids.val.d2}
 ids.q = q % PRIME"#;
 pub fn compute_q_mod_prime(
     vm: &mut VirtualMachine,
-    _exec_scopes: &mut ExecutionScopes,
+    exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
+    let secp_p = exec_scopes.get_ref("SECP256R1_P")?;
     let val = Uint384::from_var_name("val", vm, ids_data, ap_tracking)?.pack86();
-    let (q, r) = val.div_rem(&SECP256R1_P);
+    let (q, r) = val.div_mod_floor(&secp_p);
     if !r.is_zero() {
         return Err(HintError::SecpVerifyZero(Box::new(val)));
     }
@@ -167,6 +168,8 @@ pub fn calculate_value(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
+    exec_scopes.insert_value::<BigInt>("SECP256R1_P", SECP256R1_P.clone());
+
     // def y_squared_from_x(x: int, alpha: int, beta: int, field_prime: int) -> int:
     // """
     // Computes y^2 using the curve equation:
@@ -417,7 +420,7 @@ pub fn write_div_mod_segment(
         &BigInt3::from_var_name("b", vm, ids_data, ap_tracking)?,
         &SECP_P,
     );
-    let (q, r) = (a * b).div_rem(&BLS_PRIME);
+    let (q, r) = (a * b).div_mod_floor(&BLS_PRIME);
     let q_reloc = get_relocatable_from_var_name("q", vm, ids_data, ap_tracking)?;
     let res_reloc = get_relocatable_from_var_name("res", vm, ids_data, ap_tracking)?;
 
