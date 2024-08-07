@@ -518,7 +518,8 @@ mod tests {
     fn test_is_on_curve_2() {
         let mut vm = VirtualMachine::new(false);
         vm.set_fp(1);
-        let ids_data = ids_data!["is_on_curve"];
+        let ids_data = non_continuous_ids_data![("is_on_curve", -1)];
+        vm.segments = segments![((1, 0), 1)];
         let ap_tracking = ApTracking::default();
 
         let mut exec_scopes = ExecutionScopes::new();
@@ -612,7 +613,10 @@ mod tests {
 
         let mut exec_scopes = ExecutionScopes::new();
 
-        let constants = HashMap::new();
+        let constants = HashMap::from([
+            ("UPPER_BOUND".to_string(), Felt252::from(18446744069414584321_u128)),
+            ("SHIFT".to_string(), Felt252::from(12)),
+        ]);
         compute_ids_high_low(
             &mut vm,
             &mut exec_scopes,
