@@ -72,7 +72,7 @@ pub fn pack_x_prime(
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
     let x = Uint384::from_var_name("x", vm, ids_data, ap_tracking)?.pack86();
-    exec_scopes.insert_value("value", x.mod_floor(&SECP256R1_P));
+    exec_scopes.insert_value("x", x.mod_floor(&SECP256R1_P));
     Ok(())
 }
 
@@ -214,9 +214,8 @@ pub fn calculate_value(
     let y = y_square_int.modpow(&exp, &SECP256R1_P);
     exec_scopes.insert_value::<BigInt>("y", y.clone());
 
-    let v = get_integer_from_var_name("v", vm, ids_data, ap_tracking)?;
-    let v = BigInt::from(v.to_biguint());
-    if v % 2 == y.clone() % 2 {
+    let v = get_integer_from_var_name("v", vm, ids_data, ap_tracking)?.to_biguint();
+    if v.is_even() == y.is_even() {
         exec_scopes.insert_value("value", y);
     } else {
         let value = (-y).mod_floor(&SECP256R1_P);
