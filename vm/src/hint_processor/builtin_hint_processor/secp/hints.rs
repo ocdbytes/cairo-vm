@@ -22,7 +22,7 @@ use num_traits::{FromPrimitive, One};
 
 use super::bigint_utils::{BigInt3, Uint384};
 use super::ec_utils::EcPoint;
-use super::secp_utils::{bigint3_split, BLS_PRIME, SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P};
+use super::secp_utils::{BLS_PRIME, SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P, SECP_P};
 
 pub const MAYBE_WRITE_ADDRESS_TO_AP: &str = r#"memory[ap] = to_felt_or_relocatable(ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add())"#;
 pub fn maybe_write_address_to_ap(
@@ -55,7 +55,7 @@ pub fn pack_value_prime(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let x = BigInt3::from_var_name("x", vm, ids_data, ap_tracking)?.pack86();
+    let x = Uint384::from_var_name("x", vm, ids_data, ap_tracking)?.pack86();
     exec_scopes.insert_value("value", x.mod_floor(&SECP256R1_P));
     Ok(())
 }
@@ -199,7 +199,7 @@ pub fn calculate_value(
     //     if (y & 1) != request.y_parity:
     //         y = (-y) % prime
 
-    let x = BigInt3::from_var_name("x", vm, ids_data, ap_tracking)?
+    let x = Uint384::from_var_name("x", vm, ids_data, ap_tracking)?
         .pack86()
         .mod_floor(&SECP256R1_P);
 
@@ -273,7 +273,8 @@ pub fn calculate_value_2(
     let x = point.x.pack86().mod_floor(&SECP256R1_P);
     let y = point.y.pack86().mod_floor(&SECP256R1_P);
 
-    let value = (slope.modpow(&(2usize.into()), &SECP256R1_P) - (&x << 1u32)).mod_floor(&SECP256R1_P);
+    let value =
+        (slope.modpow(&(2usize.into()), &SECP256R1_P) - (&x << 1u32)).mod_floor(&SECP256R1_P);
 
     //Assign variables to vm scope
     exec_scopes.insert_value("slope", slope);
@@ -328,7 +329,6 @@ pub fn generate_nibbles(
     exec_scopes.insert_value("nibbles", nibbles);
     Ok(())
 }
-
 
 pub const FAST_SECP_ADD_ASSIGN_NEW_Y: &str =
     r#"value = new_y = (slope * (x - new_x) - y) % SECP256R1_P"#;
@@ -409,17 +409,23 @@ pub fn write_div_mod_segment(
     ap_tracking: &ApTracking,
     _constants: &HashMap<String, Felt252>,
 ) -> Result<(), HintError> {
-    let a = Uint384::from_var_name("a", vm, ids_data, ap_tracking)?.pack86();
-    let b = Uint384::from_var_name("b", vm, ids_data, ap_tracking)?.pack86();
+    let a = bls_pack(
+        &BigInt3::from_var_name("a", vm, ids_data, ap_tracking)?,
+        &SECP_P,
+    );
+    let b = bls_pack(
+        &BigInt3::from_var_name("b", vm, ids_data, ap_tracking)?,
+        &SECP_P,
+    );
     let (q, r) = (a * b).div_rem(&BLS_PRIME);
     let q_reloc = get_relocatable_from_var_name("q", vm, ids_data, ap_tracking)?;
     let res_reloc = get_relocatable_from_var_name("res", vm, ids_data, ap_tracking)?;
 
-    let q_arg: Vec<MaybeRelocatable> = bigint3_split(&q.to_biguint().unwrap())?
+    let q_arg: Vec<MaybeRelocatable> = bls_split(&q)
         .into_iter()
         .map(|ref n| Felt252::from(n).into())
         .collect::<Vec<MaybeRelocatable>>();
-    let res_arg: Vec<MaybeRelocatable> = bigint3_split(&r.to_biguint().unwrap())?
+    let res_arg: Vec<MaybeRelocatable> = bls_split(&r)
         .into_iter()
         .map(|ref n| Felt252::from(n).into())
         .collect::<Vec<MaybeRelocatable>>();
@@ -427,6 +433,44 @@ pub fn write_div_mod_segment(
     vm.write_arg(res_reloc, &res_arg)
         .map_err(HintError::Memory)?;
     Ok(())
+}
+
+lazy_static::lazy_static! {
+    static ref BASE: BigInt = BigInt::from_u64(2).unwrap().pow(86);
+}
+
+fn bls_split(num: &BigInt) -> Vec<BigInt> {
+    use num_traits::Signed;
+    let mut num = num.clone();
+    let mut a = Vec::new();
+    for _ in 0..2 {
+        let residue = num.clone() % BASE.deref();
+        num = num / BASE.deref();
+        a.push(residue);
+    }
+    a.push(num.clone());
+    assert!(num.abs() < BigInt::from_u64(1 << 127).unwrap());
+    a
+}
+
+fn as_int(value: &BigInt, prime: &BigInt) -> BigInt {
+    let half_prime = prime.clone() / 2u32;
+    if value > &half_prime {
+        value - prime
+    } else {
+        value.clone()
+    }
+}
+
+fn bls_pack(z: &BigInt3, prime: &BigInt) -> BigInt {
+    let limbs = &z.limbs;
+    limbs
+        .iter()
+        .enumerate()
+        .fold(BigInt::zero(), |acc, (i, &ref limb)| {
+            let limb_as_int = as_int(&limb.to_bigint(), prime);
+            acc + limb_as_int * &BASE.pow(i as u32)
+        })
 }
 
 #[cfg(test)]
