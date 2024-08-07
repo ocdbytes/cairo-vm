@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
-    get_constant_from_var_name, get_integer_from_var_name, get_ptr_from_var_name,
-    get_relocatable_from_var_name, insert_value_from_var_name, insert_value_into_ap,
+    get_constant_from_var_name, get_integer_from_var_name, get_relocatable_from_var_name,
+    insert_value_from_var_name,
 };
 use crate::hint_processor::builtin_hint_processor::uint256_utils::Uint256;
 use crate::hint_processor::hint_processor_definition::HintReference;
@@ -22,33 +22,12 @@ use num_traits::{FromPrimitive, One};
 
 use super::bigint_utils::{BigInt3, Uint384};
 use super::ec_utils::EcPoint;
-use super::secp_utils::{BLS_PRIME, SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P, SECP_P};
+use super::secp_utils::{BLS_BASE, BLS_PRIME, SECP256R1_ALPHA, SECP256R1_B, SECP256R1_P, SECP_P};
 
-pub const MAYBE_WRITE_ADDRESS_TO_AP: &str = r#"memory[ap] = to_felt_or_relocatable(ids.response.ec_point.address_ if ids.not_on_curve == 0 else segments.add())"#;
-pub fn maybe_write_address_to_ap(
-    vm: &mut VirtualMachine,
-    _exec_scopes: &mut ExecutionScopes,
-    ids_data: &HashMap<String, HintReference>,
-    _ap_tracking: &ApTracking,
-    _constants: &HashMap<String, Felt252>,
-) -> Result<(), HintError> {
-    let not_on_curve = get_integer_from_var_name("not_on_curve", vm, ids_data, _ap_tracking)?;
-    if not_on_curve == Felt252::ZERO {
-        let response = get_ptr_from_var_name("response", vm, ids_data, _ap_tracking)?;
-        let offset = 1; // SecpNewResponse::ec_point_offset()
-        let ec_point = vm.get_relocatable((response + offset)?)?; //TODO: Use actual struct offset
-        insert_value_into_ap(vm, ec_point)?;
-    } else {
-        let segment = vm.add_memory_segment();
-        insert_value_into_ap(vm, segment)?;
-    }
-    Ok(())
-}
-
-pub const PACK_VALUE_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+pub const SECP_REDUCE: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
 from starkware.cairo.common.cairo_secp.secp_utils import pack
 value = pack(ids.x, PRIME) % SECP256R1_P"#;
-pub fn pack_value_prime(
+pub fn reduce_value(
     vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
@@ -60,11 +39,11 @@ pub fn pack_value_prime(
     Ok(())
 }
 
-pub const PACK_X_PRIME: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+pub const SECP_REDUCE_X: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
 from starkware.cairo.common.cairo_secp.secp_utils import pack
 
 x = pack(ids.x, PRIME) % SECP256R1_P"#;
-pub fn pack_x_prime(
+pub fn reduce_x(
     vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
@@ -138,7 +117,7 @@ pub fn compute_ids_high_low(
     Ok(())
 }
 
-pub const CALCULATE_VALUE: &str = r#"from starkware.cairo.common.cairo_secp.secp_utils import SECP256R1, pack
+pub const SECP_R1_GET_POINT_FROM_X: &str = r#"from starkware.cairo.common.cairo_secp.secp_utils import SECP256R1, pack
 from starkware.python.math_utils import y_squared_from_x
 
 y_square_int = y_squared_from_x(
@@ -160,7 +139,7 @@ if ids.v % 2 == y % 2:
 else:
     value = (-y) % SECP256R1.prime"#;
 
-pub fn calculate_value(
+pub fn r1_get_point_from_x(
     vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
@@ -178,15 +157,13 @@ pub fn calculate_value(
     fn y_squared_from_x(x: &BigInt, alpha: &BigInt, beta: &BigInt, field_prime: &BigInt) -> BigInt {
         use std::ops::{Add, Mul, Rem};
         // Compute x^3 (mod field_prime)
-        let x_cubed = x.modpow(&BigInt::from(3), &field_prime);
+        let x_cubed = x.modpow(&BigInt::from(3), field_prime);
 
         // Compute alpha * x
         let alpha_x = alpha.mul(x);
 
         // Compute y^2 = (x^3 + alpha * x + beta) % field_prime
-        let y_squared = x_cubed.add(&alpha_x).add(beta).rem(field_prime);
-
-        y_squared
+        x_cubed.add(&alpha_x).add(beta).rem(field_prime)
     }
 
     // prime = curve.prime
@@ -248,7 +225,7 @@ pub fn is_on_curve_2(
     Ok(())
 }
 
-pub const CALCULATE_VALUE_2: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
+pub const SECP_DOUBLE_ASSIGN_NEW_X: &str = r#"from starkware.cairo.common.cairo_secp.secp256r1_utils import SECP256R1_P
 from starkware.cairo.common.cairo_secp.secp_utils import pack
 
 slope = pack(ids.slope, SECP256R1_P)
@@ -257,7 +234,7 @@ y = pack(ids.point.y, SECP256R1_P)
 
 value = new_x = (pow(slope, 2, SECP256R1_P) - 2 * x) % SECP256R1_P"#;
 
-pub fn calculate_value_2(
+pub fn double_assign_new_x(
     vm: &mut VirtualMachine,
     exec_scopes: &mut ExecutionScopes,
     ids_data: &HashMap<String, HintReference>,
@@ -286,7 +263,6 @@ pub fn calculate_value_2(
     Ok(())
 }
 
-#[allow(unused)]
 pub const GENERATE_NIBBLES: &str = r#"num = (ids.scalar.high << 128) + ids.scalar.low
 nibbles = [(num >> i) & 0xf for i in range(0, 256, 4)]
 ids.first_nibble = nibbles.pop()
@@ -310,23 +286,11 @@ pub fn generate_nibbles(
     // ids.first_nibble = nibbles.pop()
     let first_nibble = nibbles.pop().unwrap();
 
-    insert_value_from_var_name(
-        "first_nibble",
-        Felt252::from(first_nibble),
-        vm,
-        ids_data,
-        ap_tracking,
-    )?;
+    insert_value_from_var_name("first_nibble", first_nibble, vm, ids_data, ap_tracking)?;
 
     // ids.last_nibble = nibbles[0]
     let last_nibble = *nibbles.get(0).unwrap();
-    insert_value_from_var_name(
-        "last_nibble",
-        Felt252::from(last_nibble),
-        vm,
-        ids_data,
-        ap_tracking,
-    )?;
+    insert_value_from_var_name("last_nibble", last_nibble, vm, ids_data, ap_tracking)?;
     exec_scopes.insert_value("nibbles", nibbles);
     Ok(())
 }
@@ -436,17 +400,13 @@ pub fn write_div_mod_segment(
     Ok(())
 }
 
-lazy_static::lazy_static! {
-    static ref BASE: BigInt = BigInt::from_u64(2).unwrap().pow(86);
-}
-
 fn bls_split(num: &BigInt) -> Vec<BigInt> {
     use num_traits::Signed;
     let mut num = num.clone();
     let mut a = Vec::new();
     for _ in 0..2 {
-        let residue = num.clone() % BASE.deref();
-        num = num / BASE.deref();
+        let residue = num.clone() % BLS_BASE.deref();
+        num /= BLS_BASE.deref();
         a.push(residue);
     }
     a.push(num.clone());
@@ -468,9 +428,9 @@ fn bls_pack(z: &BigInt3, prime: &BigInt) -> BigInt {
     limbs
         .iter()
         .enumerate()
-        .fold(BigInt::zero(), |acc, (i, &ref limb)| {
+        .fold(BigInt::zero(), |acc, (i, limb)| {
             let limb_as_int = as_int(&limb.to_bigint(), prime);
-            acc + limb_as_int * &BASE.pow(i as u32)
+            acc + limb_as_int * &BLS_BASE.pow(i as u32)
         })
 }
 
@@ -480,39 +440,11 @@ mod tests {
     use std::ops::Deref;
 
     use assert_matches::assert_matches;
-    use rstest::rstest;
 
     use crate::utils::test_utils::*;
 
     use super::*;
 
-    #[rstest]
-    fn test_set_ap_to_ec_point_address() {
-        let mut vm = VirtualMachine::new(false);
-
-        let ap_tracking = ApTracking::default();
-
-        let mut exec_scopes = ExecutionScopes::new();
-
-        vm.run_context.fp = 4;
-        vm.set_ap(4);
-        // Create hint_data
-        let ids_data = non_continuous_ids_data![("not_on_curve", -2), ("response", -1)];
-        vm.segments = segments![((1, 0), 0), ((1, 1), (2, 0)), ((1, 2), 0), ((1, 3), (1, 0))];
-        maybe_write_address_to_ap(
-            &mut vm,
-            &mut exec_scopes,
-            &ids_data,
-            &ap_tracking,
-            &Default::default(),
-        )
-        .expect("maybe_write_address_to_ap() failed");
-
-        let ap = vm.get_ap();
-
-        let ec_point = vm.get_relocatable(ap).unwrap();
-        assert_eq!(ec_point, (2, 0).into());
-    }
     #[test]
     fn test_is_on_curve_2() {
         let mut vm = VirtualMachine::new(false);
@@ -613,7 +545,10 @@ mod tests {
         let mut exec_scopes = ExecutionScopes::new();
 
         let constants = HashMap::from([
-            ("UPPER_BOUND".to_string(), Felt252::from(18446744069414584321_u128)),
+            (
+                "UPPER_BOUND".to_string(),
+                Felt252::from(18446744069414584321_u128),
+            ),
             ("SHIFT".to_string(), Felt252::from(12)),
         ]);
         compute_ids_high_low(
@@ -659,7 +594,7 @@ mod tests {
 
         let constants = HashMap::new();
 
-        calculate_value(
+        r1_get_point_from_x(
             &mut vm,
             &mut exec_scopes,
             &ids_data,
@@ -682,7 +617,7 @@ mod tests {
         let exp = (SECP256R1_P.deref() + BigInt::one()).div_floor(&BigInt::from(4));
         let y = y_square_int.modpow(&exp, &SECP256R1_P);
 
-        // Determine the expected value based on the parity of v and y
+        // Determine the expected value BLS_BASEd on the parity of v and y
         let expected_value = if v % 2 == y.clone() % 2 {
             y
         } else {
@@ -712,7 +647,7 @@ mod tests {
 
         let mut exec_scopes = ExecutionScopes::new();
 
-        pack_value_prime(
+        reduce_value(
             &mut vm,
             &mut exec_scopes,
             &ids_data,

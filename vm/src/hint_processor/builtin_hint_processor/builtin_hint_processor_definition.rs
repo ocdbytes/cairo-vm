@@ -875,14 +875,14 @@ impl HintProcessorLogic for BuiltinHintProcessor {
                 constants,
                 exec_scopes,
             ),
-            secp::hints::CALCULATE_VALUE => secp::hints::calculate_value(
+            secp::hints::SECP_R1_GET_POINT_FROM_X => secp::hints::r1_get_point_from_x(
                 vm,
                 exec_scopes,
                 &hint_data.ids_data,
                 &hint_data.ap_tracking,
                 constants,
             ),
-            secp::hints::CALCULATE_VALUE_2 => secp::hints::calculate_value_2(
+            secp::hints::SECP_DOUBLE_ASSIGN_NEW_X => secp::hints::double_assign_new_x(
                 vm,
                 exec_scopes,
                 &hint_data.ids_data,
@@ -931,21 +931,14 @@ impl HintProcessorLogic for BuiltinHintProcessor {
                 &hint_data.ap_tracking,
                 constants,
             ),
-            secp::hints::MAYBE_WRITE_ADDRESS_TO_AP => secp::hints::maybe_write_address_to_ap(
+            secp::hints::SECP_REDUCE => secp::hints::reduce_value(
                 vm,
                 exec_scopes,
                 &hint_data.ids_data,
                 &hint_data.ap_tracking,
                 constants,
             ),
-            secp::hints::PACK_VALUE_PRIME => secp::hints::pack_value_prime(
-                vm,
-                exec_scopes,
-                &hint_data.ids_data,
-                &hint_data.ap_tracking,
-                constants,
-            ),
-            secp::hints::PACK_X_PRIME => secp::hints::pack_x_prime(
+            secp::hints::SECP_REDUCE_X => secp::hints::reduce_x(
                 vm,
                 exec_scopes,
                 &hint_data.ids_data,
