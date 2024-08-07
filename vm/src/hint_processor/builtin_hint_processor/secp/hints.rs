@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::ops::Deref;
+use crate::stdlib::{collections::HashMap, ops::Deref};
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
     get_constant_from_var_name, get_integer_from_var_name, get_relocatable_from_var_name,
@@ -437,15 +436,17 @@ fn bls_pack(z: &BigInt3, prime: &BigInt) -> BigInt {
 #[cfg(test)]
 mod tests {
 
-    use std::ops::Deref;
-
     use assert_matches::assert_matches;
 
     use crate::utils::test_utils::*;
 
     use super::*;
 
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_is_on_curve_2() {
         let mut vm = VirtualMachine::new(false);
         vm.set_fp(1);
@@ -475,7 +476,9 @@ mod tests {
                 .expect("is_on_curve2 should be put in ids_data");
         assert_eq!(is_on_curve, 1.into());
     }
+
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_compute_q_mod_prime() {
         let mut vm = VirtualMachine::new(false);
 
@@ -502,6 +505,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_compute_ids_high_low() {
         let mut vm = VirtualMachine::new(false);
 
@@ -569,7 +573,9 @@ mod tests {
         assert_eq!(high, Felt252::from(expected_high));
         assert_eq!(low, Felt252::from(expected_low));
     }
+
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_calculate_value() {
         let mut vm = VirtualMachine::new(false);
         vm.set_fp(10);
@@ -617,8 +623,8 @@ mod tests {
         let exp = (SECP256R1_P.deref() + BigInt::one()).div_floor(&BigInt::from(4));
         let y = y_square_int.modpow(&exp, &SECP256R1_P);
 
-        // Determine the expected value BLS_BASEd on the parity of v and y
-        let expected_value = if v % 2 == y.clone() % 2 {
+        // Determine the expected value based on the parity of v and y
+        let expected_value = if v.is_even() == y.is_even() {
             y
         } else {
             (-y).mod_floor(&SECP256R1_P)
@@ -628,6 +634,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_pack_x_prime() {
         let mut vm = VirtualMachine::new(false);
 
