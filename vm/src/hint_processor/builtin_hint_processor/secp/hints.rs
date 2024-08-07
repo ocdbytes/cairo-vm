@@ -1,4 +1,9 @@
-use crate::stdlib::{collections::HashMap, ops::Deref};
+use crate::stdlib::{
+    collections::HashMap,
+    ops::Deref,
+    ops::{Add, Mul, Rem},
+    prelude::*,
+};
 
 use crate::hint_processor::builtin_hint_processor::hint_utils::{
     get_constant_from_var_name, get_integer_from_var_name, get_relocatable_from_var_name,
@@ -154,7 +159,6 @@ pub fn r1_get_point_from_x(
     // """
     // return (pow(x, 3, field_prime) + alpha * x + beta) % field_prime
     fn y_squared_from_x(x: &BigInt, alpha: &BigInt, beta: &BigInt, field_prime: &BigInt) -> BigInt {
-        use std::ops::{Add, Mul, Rem};
         // Compute x^3 (mod field_prime)
         let x_cubed = x.modpow(&BigInt::from(3), field_prime);
 
