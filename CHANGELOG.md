@@ -2,6 +2,8 @@
 
 #### Upcoming Changes
 
+* feat: Implement `SECP related` hints [#41](https://github.com/Moonsong-Labs/cairo-vm/pull/41)
+
 #### [1.0.0-rc5] - 2024-07-13
 
 * fix: Fixed deserialization of negative numbers in scientific notation [#1804](https://github.com/lambdaclass/cairo-vm/pull/1804)
