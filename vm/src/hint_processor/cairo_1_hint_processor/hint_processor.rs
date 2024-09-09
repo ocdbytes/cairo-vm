@@ -274,6 +274,9 @@ impl Cairo1HintProcessor {
                 t_or_k0,
                 t_or_k1,
             ),
+            Hint::Core(CoreHintBase::Core(CoreHint::EvalCircuit { n_add_mods, add_mod_builtin, n_mul_mods, mul_mod_builtin } )) => {
+                self.eval_circuit(vm, n_add_mods, add_mod_builtin, n_mul_mods, mul_mod_builtin)
+            },
             Hint::Starknet(StarknetHint::Cheatcode { selector, .. }) => {
                 let selector = &selector.value.to_bytes_be().1;
                 let selector = crate::stdlib::str::from_utf8(selector).map_err(|_| {
@@ -1191,6 +1194,33 @@ impl Cairo1HintProcessor {
             vm.insert_value(cell_ref_to_relocatable(g0_or_no_inv, vm)?, Felt252::from(0))?;
         }
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn eval_circuit(
+        &self,
+        vm: &mut VirtualMachine,
+        n_add_mods: &ResOperand,
+        add_mod_builtin: &ResOperand,
+        n_mul_mods: &ResOperand,
+        mul_mod_builtin: &ResOperand,
+    ) -> Result<(), HintError> {
+        let n_add_mods: usize = get_val(vm, n_add_mods)?
+            .to_bigint()
+            .try_into()
+            .map_err(|_| HintError::BigintToU32Fail)?;
+        let add_mod_builtin = as_relocatable(vm, add_mod_builtin)?;
+        let n_mul_mods: usize = get_val(vm, n_mul_mods)?
+            .to_bigint()
+            .try_into()
+            .map_err(|_| HintError::BigintToU32Fail)?;
+        let mul_mod_builtin = as_relocatable(vm, mul_mod_builtin)?;
+
+        vm.mod_builtin_fill_memory(
+            Some((add_mod_builtin, n_add_mods)),
+            Some((mul_mod_builtin, n_mul_mods)),
+            None,
+        ).map_err(HintError::from)
     }
 }
 
