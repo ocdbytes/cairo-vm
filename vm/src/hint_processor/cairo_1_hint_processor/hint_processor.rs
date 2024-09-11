@@ -1,3 +1,4 @@
+use super::circuit::eval_circuit;
 use super::dict_manager::DictManagerExecScope;
 use super::hint_processor_utils::*;
 use crate::any_box;
@@ -1196,7 +1197,6 @@ impl Cairo1HintProcessor {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn eval_circuit(
         &self,
         vm: &mut VirtualMachine,
@@ -1216,11 +1216,7 @@ impl Cairo1HintProcessor {
             .map_err(|_| HintError::BigintToU32Fail)?;
         let mul_mod_builtin = as_relocatable(vm, mul_mod_builtin)?;
 
-        vm.mod_builtin_fill_memory(
-            Some((add_mod_builtin, n_add_mods)),
-            Some((mul_mod_builtin, n_mul_mods)),
-            None,
-        ).map_err(HintError::from)
+        eval_circuit(vm, add_mod_builtin, n_add_mods, mul_mod_builtin, n_mul_mods)
     }
 }
 
