@@ -642,6 +642,14 @@ impl HintProcessorLogic for BuiltinHintProcessor {
                 &SECP_P,
                 "pt",
             ),
+            hint_code::EC_DOUBLE_ASSIGN_NEW_X_V5 => ec_double_assign_new_x(
+                vm,
+                exec_scopes,
+                &hint_data.ids_data,
+                &hint_data.ap_tracking,
+                &SECP256R1_P,
+                "point",
+            ),
             hint_code::EC_DOUBLE_ASSIGN_NEW_Y => ec_double_assign_new_y(exec_scopes),
             hint_code::KECCAK_WRITE_ARGS => {
                 keccak_write_args(vm, &hint_data.ids_data, &hint_data.ap_tracking)
