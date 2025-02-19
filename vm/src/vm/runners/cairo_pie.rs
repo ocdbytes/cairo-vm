@@ -297,7 +297,22 @@ impl CairoPie {
     }
 
     #[cfg(feature = "std")]
-    pub fn write_zip_file(&self, file_path: &Path) -> Result<(), std::io::Error> {
+    pub fn write_zip_file(
+        &self,
+        file_path: &Path,
+        merge_extra_segments: bool,
+    ) -> Result<(), std::io::Error> {
+        let (single_extra_segment, segment_offsets) = if merge_extra_segments {
+            self.merge_extra_segments()
+        } else {
+            (None, None)
+        };
+
+        let mut metadata = self.metadata.clone();
+
+        if let Some(segment) = single_extra_segment {
+            metadata.extra_segments = segment;
+        };
         let file = File::create(file_path)?;
         let mut zip_writer = ZipWriter::new(file);
         let options =
@@ -305,15 +320,55 @@ impl CairoPie {
         zip_writer.start_file("version.json", options)?;
         serde_json::to_writer(&mut zip_writer, &self.version)?;
         zip_writer.start_file("metadata.json", options)?;
-        serde_json::to_writer(&mut zip_writer, &self.metadata)?;
+        serde_json::to_writer(&mut zip_writer, &metadata)?;
         zip_writer.start_file("memory.bin", options)?;
-        zip_writer.write_all(&self.memory.to_bytes())?;
+        zip_writer.write_all(&self.memory.to_bytes(segment_offsets))?;
         zip_writer.start_file("additional_data.json", options)?;
         serde_json::to_writer(&mut zip_writer, &self.additional_data)?;
         zip_writer.start_file("execution_resources.json", options)?;
         serde_json::to_writer(&mut zip_writer, &self.execution_resources)?;
         zip_writer.finish()?;
         Ok(())
+    }
+
+    pub fn merge_extra_segments(
+        &self,
+    ) -> (
+        Option<Vec<SegmentInfo>>,
+        Option<HashMap<usize, Relocatable>>,
+    ) {
+        if self.metadata.extra_segments.is_empty() {
+            return (None, None);
+        }
+
+        let new_index = self.metadata.extra_segments[0].index;
+        let mut accumulated_size = 0;
+        let offsets: HashMap<usize, Relocatable> = self
+            .metadata
+            .extra_segments
+            .iter()
+            .map(|seg| {
+                let value = (
+                    seg.index as usize,
+                    Relocatable {
+                        segment_index: new_index,
+                        offset: accumulated_size,
+                    },
+                );
+
+                accumulated_size += seg.size;
+
+                value
+            })
+            .collect();
+
+        (
+            Some(vec![SegmentInfo {
+                index: new_index,
+                size: accumulated_size,
+            }]),
+            Some(offsets),
+        )
     }
 
     #[cfg(feature = "std")]
@@ -591,7 +646,24 @@ pub(super) mod serde_impl {
     }
 
     impl CairoPieMemory {
-        pub fn to_bytes(&self) -> Vec<u8> {
+        fn relocate_value(
+            index: usize,
+            offset: usize,
+            segment_offsets: &Option<HashMap<usize, Relocatable>>,
+        ) -> (usize, usize) {
+            if let Some(offsets) = segment_offsets {
+                return match offsets.get(&index) {
+                    Some(relocatable) => (
+                        relocatable.segment_index as usize,
+                        relocatable.offset + offset,
+                    ),
+                    None => (index, offset),
+                };
+            }
+
+            (index, offset)
+        }
+        pub fn to_bytes(&self, seg_offsets: Option<HashMap<usize, Relocatable>>) -> Vec<u8> {
             // Missing segment and memory holes can be ignored
             // as they can be inferred by the address on the prover side
             let values = &self.0;
@@ -599,18 +671,23 @@ pub(super) mod serde_impl {
             let mut res = Vec::with_capacity(mem_cap);
 
             for ((segment, offset), value) in values.iter() {
-                let mem_addr = ADDR_BASE + *segment as u64 * OFFSET_BASE + *offset as u64;
+                let (segment, offset) = Self::relocate_value(*segment, *offset, &seg_offsets);
+                let mem_addr = ADDR_BASE + segment as u64 * OFFSET_BASE + offset as u64;
                 res.extend_from_slice(mem_addr.to_le_bytes().as_ref());
                 match value {
                     // Serializes RelocatableValue(little endian):
                     // 1bit |   SEGMENT_BITS |   OFFSET_BITS
                     // 1    |     segment    |   offset
                     MaybeRelocatable::RelocatableValue(rel_val) => {
+                        let (segment, offset) = Self::relocate_value(
+                            rel_val.segment_index as usize,
+                            rel_val.offset,
+                            &seg_offsets,
+                        );
                         let reloc_base = BigUint::from_str_radix(RELOCATE_BASE, 16).unwrap();
                         let reloc_value = reloc_base
-                            + BigUint::from(rel_val.segment_index as usize)
-                                * BigUint::from(OFFSET_BASE)
-                            + BigUint::from(rel_val.offset);
+                            + BigUint::from(segment) * BigUint::from(OFFSET_BASE)
+                            + BigUint::from(offset);
                         res.extend_from_slice(reloc_value.to_bytes_le().as_ref());
                     }
                     // Serializes Int(little endian):
